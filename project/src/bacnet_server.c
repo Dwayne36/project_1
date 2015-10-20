@@ -20,6 +20,32 @@
 #define BACNET_BBMD_ADDRESS	"127.0.0.1"
 #define BACNET_BBMD_TTL	90
 #endif
+
+#define NUM_LISTS 5
+
+/*make linked list object*/
+typedef struct s_word_objects word_object;
+
+struct s_word_object {
+	int number;
+	word_object *next
+
+};
+static number_object *list_heads[NUM_LISTS];
+
+/* initialize mutex*/
+static pthread_mutex_t list_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t list_data_ready = PTHREAD_COND_INITIALZER;
+static pthread_cond_t list_data_flush =PTHRED_COND_INITIALIZER;
+static pthread_mutex_t timer_lock = PTHREAD_MUTEX_INITIALIZER;
+
+/* add to list*/
+static void add_to_list(word_object **list_heads, int number){
+	word_object *last_object, *tmp_object;
+	int *tmp_string;
+
+
+
 /* If you are trying out the test suite from home, this data matches the data
  * * stored in RANDOM_DATA_POOL for device number 12
  * * BACnet client will print "Successful match" whenever it is able to receive
