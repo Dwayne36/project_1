@@ -9,6 +9,12 @@
 #include <libbacnet/tsm.h>
 #include <libbacnet/ai.h>
 #include "bacnet_namespace.h"
+#include <modbus-tcp.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <string.h>
 #define BACNET_INSTANCE_NO	12
 #define BACNET_PORT	0xBAC1
 #define BACNET_INTERFACE	"lo"
@@ -42,10 +48,80 @@ static pthread_mutex_t timer_lock = PTHREAD_MUTEX_INITIALIZER;
 /* add to list*/
 static void add_to_list(word_object **list_heads, int number){
 	word_object *last_object, *tmp_object;
-	int *tmp_string;
+	int *tmp_number;
+
+	tmp_object = number;
+	tmp_object = malloc(sizeof(word_object));
+	tmp_object -> word = tmp_string;
+	tmp_object -> next = NULL;
+	pthread_mutex_lock(&list_lock);
+	if (*list_heads == NULL){*list_heads = tmp_object;}
+	
+
+	else {last_object = *list_heads;
+	while (last_object->next){last_object = last_object -> next;}
+	
+	last_object -> next = tmp_object;
+	}
+	pthread_mutex_unlock(&list_lock);
+	pthread_cond_signal(&list_data_ready);
+
+static word_object *list_get_first(number_object **list_heads){
+	word_object *first_object;
+	first_object = *list_heads;
+	*list_heads = (*list_heads) -> next;
+	return first_object;
+	}
+static void list_flush(word_object *list_head){pthread_mutex_lock(&list_lock);
+	while (list_head ! = NULL){
+		pthread_cond_signal(&list_data_ready);
+		pthread_cond_wait(&list_data_flush, &list_lock);
+		}
+		pthread_mutex_unlock(&list_lock);
+	}
+
+static int actmodbus(void){
+	modstart:
+	modbus_t *ctx;
+	ctx = modbus_new_tcp(SERVER_ADDR, SERVER_PORT);
+	if (ctx == NULL){fprintf(stderr, "Unable to allocate lobmodbus context\n");
+	sleep(1);
+	goto modstart;
+	return 1;
+	}
+	if modbus_connect(ctx) == -1){fprintf(stderr, "connection failed: %s\n", modbus_strerror(errno));
+	sleep(1);
+	goto modstart;
+	return -1;
+	}
+	else{fprintf(stderr, "connection Successful\n");
+	}
+return 0;
+}
+
+while(1){
+	rc = modbus_read_registers(ctx, ?, 5, tab_reg);
+	if (rc == -1){
+	fprintf(stderr, "%\n", modbus_strerror(errno));
+	return -1;
+	}
+
+	for (i = 0; i < rc; i++)
+	printf("reg[%d]=%d (0x%X)\n", i, tab_reg[i], tab_reg[i]);
+	add_to_list(&list_heads[i], tab_reg[i]);
+	}
+	usleep(100000);
+	}
+
+	
+
+	
 
 
 
+
+
+#if 0
 /* If you are trying out the test suite from home, this data matches the data
  * * stored in RANDOM_DATA_POOL for device number 12
  * * BACnet client will print "Successful match" whenever it is able to receive
@@ -56,11 +132,14 @@ static uint16_t test_data[] = {
 };
 
 #define NUM_TEST_DATA (sizeof(test_data)/sizeof(test_data[0]))
+#endif
+
 static pthread_mutex_t timer_lock = PTHREAD_MUTEX_INITIALIZER;
-static int Update_Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *
-					     rpdata)
-{
+static int Update_Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA * rpdata){
+
+#if 
     static int index;
+#endif
     int instance_no =
 	bacnet_Analog_Input_Instance_To_Index(rpdata->object_instance);
     if (rpdata->object_property != bacnet_PROP_PRESENT_VALUE)
