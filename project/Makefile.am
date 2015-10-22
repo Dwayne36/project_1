@@ -1,1 +1,4 @@
-UBDIRS = src
+SUBDIRS = scripts common src
+
+
+
