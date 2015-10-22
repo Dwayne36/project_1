@@ -92,7 +92,8 @@ static void list_flush(number_object * list_head)
 }
 
 #define SERVER_ADDR "127.0.0.1"
-#define SERVER_PORT 502
+#define SERVER_PORT 502 
+/*Initialise modbus structure*/
 static int actmodbus(void)
 {
     modbus_t *ctx;
@@ -105,19 +106,19 @@ static int actmodbus(void)
 	fprintf(stderr, "Unable to allocate lobmodbus context\n");
 	sleep(1);
 	goto modstart;
-	//return 1;
+	
     }
     if (modbus_connect(ctx) == -1) {
 	fprintf(stderr, "connection failed: %s\n", modbus_strerror(errno));
 	sleep(1);
-	/* free ctx */
+	modbus_free(ctx)
 	goto modstart;
-	//return -1;
+	
     } else {
 	fprintf(stderr, "connection Successful\n");
     }
-    //return 0;
-
+    
+/*Read registers*/
     while (1) {
 	rc = modbus_read_registers(ctx, 12, 1, tab_reg);
 	if (rc == -1) {
@@ -130,12 +131,14 @@ static int actmodbus(void)
 	    add_to_list(&list_heads[i], tab_reg[i]);
 	}
     	usleep(100000);
-    }
+    	}
+	
+
+	modbus_close(ctx);
+	modbus_free(ctx);
+
 
 }
-
-
-
 
 
 
@@ -162,6 +165,7 @@ static int Update_Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *
 #if 1
     static int index;
 #endif
+	number_object *current_object;
     int instance_no =
 	bacnet_Analog_Input_Instance_To_Index(rpdata->object_instance);
     if (rpdata->object_property != bacnet_PROP_PRESENT_VALUE)
@@ -176,19 +180,27 @@ static int Update_Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *
  * * Second argument: data to be sent
  * *
  * * Without reconfiguring libbacnet, a maximum of 4 values may be sent */
+	pthread_mutex_lock(&list_lock);
 
+	if(listhead[instance_no] !=NULL){
+	   current_object = list_get_first(&listhead[instance_no]);
+	  
 /* Check that list_heads is not NULL (there is at least one item in the linked i
  * list otherwise goto not_pv */
 
 /* Retrieve the head of list_heads[instance_no] - list_get_first() */
 
 /* Set present value with data from the head of the list using cur_obj->number */
-    bacnet_Analog_Input_Present_Value_Set(0 /* instance no */, test_data[index++] /* number (data) */);
+    bacnet_Analog_Input_Present_Value_Set(0 instance_no, current_object -> number);
 /* bacnet_Analog_Input_Present_Value_Set(1, test_data[index++]); */
 /* bacnet_Analog_Input_Present_Value_Set(2, test_data[index++]); */
-    if (index == NUM_TEST_DATA)
+    if (index == NUM_TEST_DATA){
 	index = 0;
+	}
+	free(current_object);
+	}
   not_pv:
+	pthread_mutex_unlock(&list_lock);
     return bacnet_Analog_Input_Read_Property(rpdata);
 }
 
@@ -313,7 +325,7 @@ int main(int argc, char **argv)
     pthread_create(&minute_tick_id, 0, minute_tick, NULL);
     pthread_create(&second_tick_id, 0, second_tick, NULL);
 
-    pthread_create(...);
+    pthread_create(&modbusrun_id, 0, modbusrun, NULL);
 /* Start another thread here to retrieve your allocated registers from the
  * * modbus server. This thread should have the following structure (in a
  * * separate function):
