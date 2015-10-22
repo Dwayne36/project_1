@@ -324,8 +324,12 @@ int main(int argc, char **argv)
     bacnet_Send_I_Am(bacnet_Handler_Transmit_Buffer);
     pthread_create(&minute_tick_id, 0, minute_tick, NULL);
     pthread_create(&second_tick_id, 0, second_tick, NULL);
-
     pthread_create(&modbusrun_id, 0, modbusrun, NULL);
+
+    pthread_t actmodbus_id;
+    pthread_create(&actmodbus_id, 0, actmodbus, NULL);
+
+    
 /* Start another thread here to retrieve your allocated registers from the
  * * modbus server. This thread should have the following structure (in a
  * * separate function):
