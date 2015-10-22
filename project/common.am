@@ -1,1 +1,1 @@
-M_CFLAGS = -Wall
+AM_CFLAGS = -Wall
