@@ -9,8 +9,10 @@ AC_PROG_CC
 AC_SEARCH_LIBS([pthread_create], [pthread], [],
 	AC_MSG_ERROR([***POSIX threads support required]))
 	PKG_CHECK_MODULES([MODBUS], [libmodbus])
+	PKG_CHECK_MODULES([BACNET], [libbacnet])
 	AC_CONFIG_FILES([
 	Makefile
 	src/Makefile
+	scripts/Makefile
 	])
 	AC_OUTPUT
