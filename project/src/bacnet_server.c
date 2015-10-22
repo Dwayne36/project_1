@@ -15,7 +15,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <string.h>
-#define BACNET_INSTANCE_NO	12
+#define BACNET_INSTANCE_NO	70
 #define BACNET_PORT	0xBAC1
 #define BACNET_INTERFACE	"lo"
 #define BACNET_DATALINK_TYPE	"bvlc"
@@ -23,11 +23,11 @@
 #define RUN_AS_BBMD_CLIENT	1
 #if RUN_AS_BBMD_CLIENT
 #define BACNET_BBMD_PORT	0xBAC0
-#define BACNET_BBMD_ADDRESS	"127.0.0.1"
+#define BACNET_BBMD_ADDRESS	"140.159.160.7"
 #define BACNET_BBMD_TTL	90
 #endif
 
-#define NUM_LISTS 5
+#define NUM_LISTS 3
 
 /*make linked list object*/
 typedef struct s_number_object number_object;
@@ -91,10 +91,10 @@ static void list_flush(number_object * list_head)
     pthread_mutex_unlock(&list_lock);
 }
 
-#define SERVER_ADDR "127.0.0.1"
+#define SERVER_ADDR "140.159.153.159"
 #define SERVER_PORT 502 
 /*Initialise modbus structure*/
-static int actmodbus(void)
+static void *actmodbus(void *arg)
 {
     modbus_t *ctx;
     int rc;
@@ -111,7 +111,7 @@ static int actmodbus(void)
     if (modbus_connect(ctx) == -1) {
 	fprintf(stderr, "connection failed: %s\n", modbus_strerror(errno));
 	sleep(1);
-	modbus_free(ctx)
+	modbus_free(ctx);
 	goto modstart;
 	
     } else {
@@ -120,10 +120,10 @@ static int actmodbus(void)
     
 /*Read registers*/
     while (1) {
-	rc = modbus_read_registers(ctx, 12, 1, tab_reg);
+	rc = modbus_read_registers(ctx, BACNET_INSTANCE_NO, NUM_LISTS, tab_reg);
 	if (rc == -1) {
 	    fprintf(stderr, "%s\n", modbus_strerror(errno));
-	    return -1;
+	    //return -1;
 	}
 
 	for (i = 0; i < rc; i++) {
@@ -182,8 +182,8 @@ static int Update_Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *
  * * Without reconfiguring libbacnet, a maximum of 4 values may be sent */
 	pthread_mutex_lock(&list_lock);
 
-	if(listhead[instance_no] !=NULL){
-	   current_object = list_get_first(&listhead[instance_no]);
+	if(list_heads[instance_no] !=NULL){
+	   current_object = list_get_first(&list_heads[instance_no]);
 	  
 /* Check that list_heads is not NULL (there is at least one item in the linked i
  * list otherwise goto not_pv */
@@ -191,7 +191,8 @@ static int Update_Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *
 /* Retrieve the head of list_heads[instance_no] - list_get_first() */
 
 /* Set present value with data from the head of the list using cur_obj->number */
-    bacnet_Analog_Input_Present_Value_Set(0 instance_no, current_object -> number);
+    bacnet_Analog_Input_Present_Value_Set(instance_no, current_object -> number);
+    printf("-------------------- %i:04X\n", instance_no, current_object->number);
 /* bacnet_Analog_Input_Present_Value_Set(1, test_data[index++]); */
 /* bacnet_Analog_Input_Present_Value_Set(2, test_data[index++]); */
     if (index == NUM_TEST_DATA){
@@ -324,7 +325,7 @@ int main(int argc, char **argv)
     bacnet_Send_I_Am(bacnet_Handler_Transmit_Buffer);
     pthread_create(&minute_tick_id, 0, minute_tick, NULL);
     pthread_create(&second_tick_id, 0, second_tick, NULL);
-    pthread_create(&modbusrun_id, 0, modbusrun, NULL);
+//    pthread_create(&modbusrun_id, 0, modbusrun, NULL);
 
     pthread_t actmodbus_id;
     pthread_create(&actmodbus_id, 0, actmodbus, NULL);
