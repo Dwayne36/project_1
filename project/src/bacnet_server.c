@@ -15,7 +15,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <string.h>
-#define BACNET_INSTANCE_NO	70
+#define BACNET_DEVICE_NO	70
 #define BACNET_PORT	0xBAC1
 #define BACNET_INTERFACE	"lo"
 #define BACNET_DATALINK_TYPE	"bvlc"
@@ -27,19 +27,20 @@
 #define BACNET_BBMD_TTL	90
 #endif
 
-#define NUM_LISTS 3
+#define NUM_INSTANCES 3
 
 /*make linked list object*/
 typedef struct s_number_object number_object;
 
+/*Define structure containing a number and a pointer with the address of the next box*/
 struct s_number_object {
     int number;
     number_object *next;
 
 };
-static number_object *list_heads[NUM_LISTS];
+static number_object *list_heads[NUM_INSTANCES];
 
-/* initialize mutex*/
+/* initialize mutex list lock */
 static pthread_mutex_t list_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t list_data_ready = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t list_data_flush = PTHREAD_COND_INITIALIZER;
@@ -51,16 +52,18 @@ static void add_to_list(number_object ** list_heads, int number)
     number_object *last_object, *tmp_object;
     int *tmp_number;
 
-    //tmp_object = number;
+/*Memory allocation must be done outside of locking*/
     tmp_object = malloc(sizeof(number_object));
     tmp_object->number = number;
     tmp_object->next = NULL;
     pthread_mutex_lock(&list_lock);
+
+    /*If the list is empty place tmp_object at the head */
     if (*list_heads == NULL) {
 	*list_heads = tmp_object;
     }
 
-
+/*Continue through list until the last object is found*/
     else {
 	last_object = *list_heads;
 	while (last_object->next) {
@@ -92,7 +95,7 @@ static void list_flush(number_object * list_head)
 }
 
 #define SERVER_ADDR "140.159.153.159"
-#define SERVER_PORT 502 
+#define SERVER_PORT 502
 /*Initialise modbus structure*/
 static void *actmodbus(void *arg)
 {
@@ -106,21 +109,22 @@ static void *actmodbus(void *arg)
 	fprintf(stderr, "Unable to allocate lobmodbus context\n");
 	sleep(1);
 	goto modstart;
-	
+
     }
     if (modbus_connect(ctx) == -1) {
 	fprintf(stderr, "connection failed: %s\n", modbus_strerror(errno));
 	sleep(1);
 	modbus_free(ctx);
 	goto modstart;
-	
+
     } else {
 	fprintf(stderr, "connection Successful\n");
     }
-    
+
 /*Read registers*/
     while (1) {
-	rc = modbus_read_registers(ctx, BACNET_INSTANCE_NO, NUM_LISTS, tab_reg);
+	rc = modbus_read_registers(ctx, BACNET_INSTANCE_NO, NUM_INSTANCES,
+				   tab_reg);
 	if (rc == -1) {
 	    fprintf(stderr, "%s\n", modbus_strerror(errno));
 	    //return -1;
@@ -130,12 +134,12 @@ static void *actmodbus(void *arg)
 	    printf("reg[%d]=%d (0x%X)\n", i, tab_reg[i], tab_reg[i]);
 	    add_to_list(&list_heads[i], tab_reg[i]);
 	}
-    	usleep(100000);
-    	}
-	
+	usleep(100000);
+    }
 
-	modbus_close(ctx);
-	modbus_free(ctx);
+
+    modbus_close(ctx);
+    modbus_free(ctx);
 
 
 }
@@ -145,11 +149,8 @@ static void *actmodbus(void *arg)
 
 
 #if 1
-/* If you are trying out the test suite from home, this data matches the data
- * * stored in RANDOM_DATA_POOL for device number 12
- * * BACnet client will print "Successful match" whenever it is able to receive
- * * this set of data. Note that you will not have access to the RANDOM_DATA_POOL
- * * for your final submitted application. */
+/*This section is for testing procedure but still needs to be included*/
+
 static uint16_t test_data[] = {
     0xA4EC, 0x6E39, 0x8740, 0x1065, 0x9134, 0xFC8C
 };
@@ -165,49 +166,48 @@ static int Update_Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *
 #if 1
     static int index;
 #endif
-	number_object *current_object;
+    number_object *current_object;
     int instance_no =
 	bacnet_Analog_Input_Instance_To_Index(rpdata->object_instance);
     if (rpdata->object_property != bacnet_PROP_PRESENT_VALUE)
 	goto not_pv;
     printf("AI_Present_Value request for instance %i\n", instance_no);
-/* Update the values to be sent to the BACnet client here.
- * * The data should be read from the head of a linked list. You are required
- * * to implement this list functionality.
- * *
- * * bacnet_Analog_Input_Present_Value_Set()
- * * First argument: Instance No
- * * Second argument: data to be sent
- * *
- * * Without reconfiguring libbacnet, a maximum of 4 values may be sent */
-	pthread_mutex_lock(&list_lock);
+    pthread_mutex_lock(&list_lock);
+/* Retrieve the head of list_heads[instance_no]*/
 
-	if(list_heads[instance_no] !=NULL){
-	   current_object = list_get_first(&list_heads[instance_no]);
-	  
-/* Check that list_heads is not NULL (there is at least one item in the linked i
- * list otherwise goto not_pv */
+    if (list_heads[instance_no] != NULL) {
+	current_object = list_get_first(&list_heads[instance_no]);
 
-/* Retrieve the head of list_heads[instance_no] - list_get_first() */
 
 /* Set present value with data from the head of the list using cur_obj->number */
-    bacnet_Analog_Input_Present_Value_Set(instance_no, current_object -> number);
-    printf("-------------------- %i:04X\n", instance_no, current_object->number);
-/* bacnet_Analog_Input_Present_Value_Set(1, test_data[index++]); */
-/* bacnet_Analog_Input_Present_Value_Set(2, test_data[index++]); */
-    if (index == NUM_TEST_DATA){
-	index = 0;
-	}
+	bacnet_Analog_Input_Present_Value_Set(instance_no,
+					      current_object->number);
+	printf("-------------------- %i:04X\n", instance_no,
+	       current_object->number);
+
 	free(current_object);
-	}
-  not_pv:
-	pthread_mutex_unlock(&list_lock);
-    return bacnet_Analog_Input_Read_Property(rpdata);
+    }
 }
 
+not_pv:
+pthread_mutex_unlock(&list_lock);
+return bacnet_Analog_Input_Read_Property(rpdata);
+}
+
+/*Make BACnet Devices*/
 static bacnet_object_functions_t server_objects[] = {
     {
-     bacnet_OBJECT_DEVICE, NULL, bacnet_Device_Count, bacnet_Device_Index_To_Instance, bacnet_Device_Valid_Object_Instance_Number, bacnet_Device_Object_Name, bacnet_Device_Read_Property_Local, bacnet_Device_Write_Property_Local, bacnet_Device_Property_Lists, bacnet_DeviceGetRRInfo, NULL,	/* Iterator */
+     bacnet_OBJECT_DEVICE,
+     NULL,
+     bacnet_Device_Count,
+     bacnet_Device_Index_To_Instance,
+     bacnet_Device_Valid_Object_Instance_Number,
+     bacnet_Device_Object_Name,
+     bacnet_Device_Read_Property_Local,
+     bacnet_Device_Write_Property_Local,
+     bacnet_Device_Property_Lists,
+     bacnet_DeviceGetRRInfo,
+     NULL,			/* Iterator */
      NULL,			/* Value_Lists */
      NULL,			/* COV */
      NULL,			/* COV Clear */
@@ -230,6 +230,7 @@ static bacnet_object_functions_t server_objects[] = {
 						    MAX_BACNET_OBJECT_TYPE}
 };
 
+/*Register with BBMD*/
 static void register_with_bbmd(void)
 {
 #if RUN_AS_BBMD_CLIENT
@@ -307,7 +308,9 @@ int main(int argc, char **argv)
 {
     uint8_t rx_buf[bacnet_MAX_MPDU];
     uint16_t pdu_len;
+    /*Initialize BACnet */
     BACNET_ADDRESS src;
+
     pthread_t minute_tick_id, second_tick_id;
     bacnet_Device_Set_Object_Instance_Number(BACNET_INSTANCE_NO);
     bacnet_address_init();
@@ -315,33 +318,23 @@ int main(int argc, char **argv)
     bacnet_Device_Init(server_objects);
     BN_UNC(WHO_IS, who_is);
     BN_CON(READ_PROPERTY, read_property);
+
     bacnet_BIP_Debug = true;
     bacnet_bip_set_port(htons(BACNET_PORT));
     bacnet_datalink_set(BACNET_DATALINK_TYPE);
     bacnet_datalink_init(BACNET_INTERFACE);
     atexit(bacnet_datalink_cleanup);
     memset(&src, 0, sizeof(src));
+
     register_with_bbmd();
+
     bacnet_Send_I_Am(bacnet_Handler_Transmit_Buffer);
     pthread_create(&minute_tick_id, 0, minute_tick, NULL);
     pthread_create(&second_tick_id, 0, second_tick, NULL);
-//    pthread_create(&modbusrun_id, 0, modbusrun, NULL);
 
     pthread_t actmodbus_id;
     pthread_create(&actmodbus_id, 0, actmodbus, NULL);
 
-    
-/* Start another thread here to retrieve your allocated registers from the
- * * modbus server. This thread should have the following structure (in a
- * * separate function):
- * *
- * * Initialise:
- * * Connect to the modbus server
- * *
- * * Loop:
- * * Read the required number of registers from the modbus server
- * * Store the register data into the tail of a linked list
- * */
     while (1) {
 	pdu_len =
 	    bacnet_datalink_receive(&src, rx_buf, bacnet_MAX_MPDU,
