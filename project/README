@@ -1,0 +1,6 @@
+EES4100 Operating Systems & Network Programming Project 
+
+Application Description
+-----------------------
+This application is a MODBUS-BACnet bridge it simultaniously functions as 
+a MODBUS client and a BACnet sever in seperate threads. This aplication reads data from a modbus server located at victoria university and adds it to the tail of the linked list. The data from the linked list tail is then transmitted to the BACnet client.
